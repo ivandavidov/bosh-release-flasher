@@ -1,6 +1,6 @@
 # BOSH Release Flasher
 
-``brflash`` is a tool for fast generation of BOSH compatible development releases which afterwards can be uploaded and deployed via the BOSH CLI. Currently the ``brflash`` supports [v1](https://bosh.io/docs/sysadmin-commands.html) and [v2](https://bosh.io/docs/cli-v2.html) of the CLI. The tool has been tested with [cf-release](https://github.com/cloudfoundry/cf-release) version "264" and [diego-release](https://github.com/cloudfoundry/diego-release) version "1.18.1".
+``brflash`` is a tool for fast generation of [BOSH](http://bosh.io) compatible development releases which afterwards can be uploaded and deployed via the BOSH CLI. Currently ``brflash`` supports [v1](https://bosh.io/docs/sysadmin-commands.html) and [v2](https://bosh.io/docs/cli-v2.html) of the CLI. The tool has been tested with [cf-release](https://github.com/cloudfoundry/cf-release) version "264" and [diego-release](https://github.com/cloudfoundry/diego-release) version "1.18.1".
 
 ## Use case
 
