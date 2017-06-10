@@ -1,0 +1,186 @@
+#!/bin/bash
+
+login_shell=0
+shopt -q login_shell && login_shell=1
+
+if [ ! "$login_shell" = "1" -o "$1" = "" -o ! -d "$1" ] ; then
+  cat << EOF
+
+  Mandatory argument is missing or it is not valid directory,
+  or the executing shell is not login shell.
+
+  How to use this script:
+
+  bash --login $0 <release_dir>
+
+  Examples:
+
+  bash --login $0 cf-release
+  bash --login $0 diego-release
+
+EOF
+
+  exit 1
+fi
+
+git_ver=`git --version | awk '{print $3}' | cut -f1 -d'.'`
+if (( git_ver < 2 )) ; then
+  cat << EOF
+
+  Git version should be at least 2.0. Cannot continue.
+
+EOF
+ 
+  exit 1
+fi;
+
+
+if [ "`which rvm`" = "" ] ; then
+  cat << EOF
+
+  RVM is not installed (http://rvm.io). Cannot continue.
+
+EOF
+ 
+  exit 1
+fi
+
+begin=`date`
+
+set -e -x
+
+# Ruby version 2.3 is required or otherwise some
+# packages fail when they are built from source.
+rvm install 2.3
+rvm use 2.3
+
+# Ensure we have the "bundler" gem, regardless of
+# the bosh CLI version we will be using later.
+gem install bundler --no-ri --no-rdoc
+
+# This block ensure that bosh CLI v1 is installed.
+# If you have installed manually bosh CLI v2 as
+# 'bosh', the new CLI will be detected and CLI v1
+# won't be installed.
+if [ ! `which bosh` ] ; then
+  # The command 'bosh' is not available.
+  # Installing CLI v1.
+  gem install bosh_cli --no-ri --no-rdoc
+fi
+
+cd $1
+
+# Checkout the latest stable tag and initialize
+# all submodules in parallel. This saves time.
+git fetch
+latest_tag=`git describe --tags --abbrev=0`
+git checkout tags/$latest_tag
+git submodule update --init --recursive --jobs 20
+
+# Removing the folder ".final_builds" has several
+# side effects:
+# 1) The blobs required for the "final" release are
+#    silently skipped. This saves us a lot of time.
+# 2) We have to use "--force" in order to skip the
+#    "dirty git folder" check.
+# 3) Some package artifacts are built from source.
+#    This is faster than fetching the same package
+#    artifacts as blobs from "s3".
+rm -rf dev_releases .dev_builds .final_builds
+
+# Check the bosh client version and proceed accordingly.
+bosh_cli_ver=`bosh --version | head -n 1 | awk '{print $2}' | cut -f1 -d'.'`
+
+if [ "$bosh_cli_ver" = "1" ] ; then
+  # Using the "--parallel" option allows us to fetch
+  # multiple blobs simultaneously. Works only for "dev"
+  # blobs and has no effect for "final" blobs which are
+  # always fetched in serial.
+  bosh -n --parallel 20 create release --force --with-tarball
+
+  set +e +x
+
+  cat << EOF
+
+  ###########################################################
+  #                                                         #
+  # The release is generated as "tgz" in this folder:       #
+  #                                                         #
+  # <release_dir>/dev_releases/<release_name>/<release_tgz> #
+  #                                                         #
+  # Examples:                                               #
+  #                                                         #
+  # cf-release/dev_releases/cf/cf-264+dev.1.tgz             #
+  # diego-release/dev_releases/diego/diego-1.18.1+dev.1.tgz #
+  #                                                         #
+  # The "tgz" can be used as backup and we can upload it    #
+  # on demand. In this case we don't need to issue the      #
+  # command "bosh bosh create release" in advance.          #
+  #                                                         #
+  # Examples:                                               #
+  #                                                         #
+  # bosh upload release cf-264+dev.1.tgz                    #
+  # bosh upload release diego-1.18.1+dev.1.tgz              #
+  #                                                         #
+  ###########################################################
+
+EOF
+
+elif [ "$bosh_cli_ver" = "2" ] ; then
+  dir_name=${PWD##*/}
+  tgz_name=$dir_name-$latest_tag.tgz
+
+  # Remove old "tgz" if it exists.
+  rm -f $tgz_name
+
+  # Download all "dev" blobs in parallel.
+  bosh -n sync-blobs --parallel=20
+
+  # Create new release and generate "tgz".
+  bosh -n create-release --force --tarball=$tgz_name
+
+  set +e +x
+
+  cat << EOF
+
+  Release archive is here:
+
+  $1/$tgz_name
+
+  ########################################################
+  #                                                      #
+  # The release is generated as "tgz" in the same folder #
+  # that has been passed as argument to this script.     #
+  #                                                      #
+  # The "tgz" can be used as backup and we can upload it #
+  # on demand. In this case we don't need to issue the   #
+  # command "bosh -e <env> create-release" in advance.   #
+  #                                                      #
+  # Examples:                                            #
+  #                                                      #
+  # bosh -e vbox upload-release cf-release-v264.tgz      #
+  # bosh -e vbox upload-release diego-release-1.18.1.tgz #
+  #                                                      #
+  ########################################################
+
+EOF
+
+else
+  cat << EOF
+
+  BOSH CLI version '$bosh_cli_ver' is not supported.
+
+EOF
+
+  exit 1
+fi
+
+set +e +x
+
+end=`date`
+
+echo
+echo "Begin : $begin"
+echo "End   : $end"
+echo
+
