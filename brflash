@@ -115,7 +115,7 @@ if [ "$bosh_cli_ver" = "1" ] ; then
   #                                                         #
   # The "tgz" can be used as backup and we can upload it    #
   # on demand. In this case we don't need to issue the      #
-  # command "bosh bosh create release" in advance.          #
+  # command "bosh create release" in advance.               #
   #                                                         #
   # Examples:                                               #
   #                                                         #
@@ -154,7 +154,7 @@ elif [ "$bosh_cli_ver" = "2" ] ; then
   #                                                      #
   # The "tgz" can be used as backup and we can upload it #
   # on demand. In this case we don't need to issue the   #
-  # command "bosh -e <env> create-release" in advance.   #
+  # command "bosh create-release" in advance.            #
   #                                                      #
   # Examples:                                            #
   #                                                      #
